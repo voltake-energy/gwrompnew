@@ -296,6 +296,16 @@
         }
         .img-hold-note { font-size: 10px; color: #95a5a6; }
 
+        .btn-newform {
+            width: 100%; background: #fff; color: #2c3e50;
+            border: 1px solid #bdc3c7; padding: 9px; border-radius: 4px;
+            font-size: 11px; font-weight: bold; cursor: pointer; margin-bottom: 10px;
+        }
+        .btn-newform:hover { background: #ecf0f1; }
+        .btn-newform.confirming {
+            background: #e67e22; color: #fff; border-color: #d35400;
+        }
+
         .btn-del-img {
             background: #fff; color: #e74c3c; border: 1px solid #e74c3c;
             padding: 0 12px; height: 30px; border-radius: 4px; cursor: pointer;
@@ -563,10 +573,8 @@
                 <button class="btn-logout" onclick="logout()">Log Keluar</button>
             </div>
 
-            <button type="button" id="btnNewReport" class="print-btn" style="background-color:#16a085; margin-top:0;" onclick="resetFormForNewReport()">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
-                Mula Laporan Baru
-            </button>
+            <button type="button" id="btnResetForm" class="btn-newform"
+                    onclick="requestResetForm(this)">Borang Baru (Kosongkan Semua)</button>
 
             <a href="/dashboard" id="btnDashboard" class="btn-dashboard" style="display: none;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
@@ -926,7 +934,7 @@
 
     <!-- JAVASCRIPT -->
     <script>
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwr7nTbEThRdfcQwYiteJw9OlMeRZYjBQf5vSE0fGjBoTLiaLNwebVbDlTj0PJlW9P0/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwGau7rbUxyvTXGPHxJSeTwn9yUOXBWbafIjXJVow05B-Pf4yS5RZf7FYBHcJghGMDq/exec";
 
         // Tetapan prestasi
         const IMG_MAX_DIM      = 1400;  // saiz maksimum sisi terpanjang gambar
@@ -1101,10 +1109,12 @@
         }
 
         function buildJob(type, pdfBase64, staffSignatureBase64) {
-            // Jana staffToken sendiri kalau belum ada.
-            // Penting: kalau draf dan submit sama-sama dalam barisan, kedua-duanya
-            // mesti merujuk baris yang SAMA dalam sheet, bukan cipta dua baris.
-            if (!currentStaffToken) currentStaffToken = uuid();
+            // NOTA PENTING:
+            // staffToken TIDAK dijana sendiri di sini. Ia hanya wujud bila pengguna
+            // menarik draf sedia ada melalui "Cari Maklumat". Kalau kosong, server
+            // akan cipta BARIS BARU — bukan menulis atas rekod lama.
+            // Anti-ulangan semasa cuba-semula dikendalikan oleh clientReqId,
+            // bukan oleh staffToken.
 
             const meta = {
                 location: val('f_loc'),
@@ -1232,9 +1242,13 @@
 
                     const res = await sendJob(job);
 
-                    if (res.staffToken) currentStaffToken = res.staffToken;
-                    if (job.type === 'submit_report' && res.approvalLink) {
-                        showApprovalResult(res, job);
+                    if (job.type === 'submit_report') {
+                        // Laporan sudah siap dihantar. Kosongkan token supaya
+                        // borang seterusnya mula sebagai rekod BARU.
+                        currentStaffToken = '';
+                        if (res.approvalLink) showApprovalResult(res, job);
+                    } else if (res.staffToken) {
+                        currentStaffToken = res.staffToken;
                     }
                     await idbDelete(job.id);
                     job.status = 'done';
@@ -1413,71 +1427,76 @@
             }
         }
 
-        /**
-         * MULA LAPORAN BARU
-         * Ini fix utama untuk isu "update form ganti row terakhir": punca sebenar
-         * ialah currentStaffToken tak pernah reset selepas satu report siap, jadi
-         * report seterusnya (dalam sesi sama, tanpa logout) hantar token lama dan
-         * backend ingat ia update report lama tu, bukan cipta row baru.
-         *
-         * Tekan button ni bila nak mula report baru dalam sesi yang sama —
-         * token baru dijana, semua field/gambar/tandatangan dikosongkan.
-         */
-        function resetFormForNewReport() {
-            if (!confirm("Ini akan kosongkan semua maklumat dalam form untuk mula laporan baru.\n\nDraf yang dah 'Simpan Data' selamat dalam sistem — cari balik guna PO Number nanti.\nTapi apa-apa yang belum sempat disimpan akan hilang.\n\nTeruskan?")) {
+        /* =========================================================
+           BORANG BARU — KOSONGKAN SEMUA
+           Guna butang ini setiap kali mula laporan baru. Ia memastikan
+           staffToken dikosongkan supaya rekod baru dicipta, bukan menimpa
+           rekod sebelumnya.
+           ========================================================= */
+        const PREVIEW_IDS = ['v_date','v_po','v_qt','v_mos','v_client','v_title','v_loc',
+            'v_in','v_out','v_pic_name','v_pic_phone','v_issue','v_remark',
+            'v_sign_client_name','v_sign_client_pos','v_sign_client_phone',
+            'v_staff_name','v_staff_pos','v_sign_date1','v_sign_date2'];
+
+        let resetPending = false;
+        let resetTimer = null;
+
+        function requestResetForm(btn) {
+            if (resetPending) {
+                clearTimeout(resetTimer);
+                resetPending = false;
+                doResetForm();
                 return;
             }
+            resetPending = true;
+            btn.classList.add('confirming');
+            btn.innerText = 'Tekan lagi untuk kosongkan';
+            resetTimer = setTimeout(function () {
+                resetPending = false;
+                btn.classList.remove('confirming');
+                btn.innerText = 'Borang Baru (Kosongkan Semua)';
+            }, 3000);
+        }
 
-            // Kunci utama fix — token baru elak clash dengan report sebelum ini
-            currentStaffToken = '';
+        function doResetForm() {
+            TEXT_FIELD_IDS.forEach(function (id) {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            PREVIEW_IDS.forEach(function (id) {
+                const el = document.getElementById(id);
+                if (el) el.innerText = '';
+            });
 
-            // Kosongkan semua field teks/tarikh & preview dia sekali (setFieldValue dispatch 'input')
-            TEXT_FIELD_IDS.forEach(function (id) { setFieldValue(id, ''); });
-
-            // Job description kembali ke satu baris kosong
             jobDescriptions = [{ desc: '', remark: '' }];
             renderJobDescEditor();
 
-            // Manpower
-            const paxCountEl = document.getElementById('f_pax_count');
-            const paxNamesEl = document.getElementById('f_pax_names');
-            if (paxCountEl) paxCountEl.value = '';
-            if (paxNamesEl) paxNamesEl.value = '';
-            updatePax();
-
-            // Masa (preview v_in/v_out ikut sekali sebab setFieldValue f_in/f_out dah dispatch input,
-            // tapi panggil terus untuk pastikan label preview memang kosong)
-            updateTimeIO('in');
-            updateTimeIO('out');
-
-            // Gambar
             uploadedImages = [];
+            resetPendingDelete();
             renderEditorImages();
             renderImages();
 
-            // Tandatangan — lukis & upload
             clearStaffCanvas();
             clearSigUpload();
-            setSigMode('draw');
 
-            // Checkbox "Sama seperti PIC Client"
-            const copyPicEl = document.getElementById('copyPicDetails');
-            if (copyPicEl) copyPicEl.checked = false;
+            const cb = document.getElementById('copyPicDetails');
+            if (cb) cb.checked = false;
 
-            // Carian PO
-            const searchInput = document.getElementById('searchPoInput');
-            if (searchInput) searchInput.value = '';
-            const searchMsg = document.getElementById('searchMsg');
-            if (searchMsg) searchMsg.innerText = '';
+            // Ini yang paling penting — rekod seterusnya jadi baris BARU
+            currentStaffToken = '';
 
-            // Buang autosave lama & banner pulih, reset mesej sistem
             clearAutosave();
             document.getElementById('restoreBanner').style.display = 'none';
-            const msgBox = document.getElementById('systemMessage');
-            msgBox.style.background = 'transparent';
-            msgBox.innerHTML = '';
 
-            applyPreviewScale();
+            const msg = document.getElementById('systemMessage');
+            msg.innerHTML = 'Borang dikosongkan. Sedia untuk laporan baru.';
+            msg.style.background = '#eafaf1';
+
+            const btn = document.getElementById('btnResetForm');
+            if (btn) {
+                btn.classList.remove('confirming');
+                btn.innerText = 'Borang Baru (Kosongkan Semua)';
+            }
         }
 
         /* =========================================
@@ -1486,7 +1505,7 @@
         let autosaveTimer = null;
 
         function collectTextState() {
-            const state = { fields: {}, jobs: jobDescriptions, staffToken: currentStaffToken, ts: Date.now() };
+            const state = { fields: {}, jobs: jobDescriptions, ts: Date.now() };
             TEXT_FIELD_IDS.forEach(function (id) {
                 const el = document.getElementById(id);
                 if (el) state.fields[id] = el.value;
@@ -1524,7 +1543,6 @@
                     if (st.fields[id] !== undefined) setFieldValue(id, st.fields[id]);
                 });
                 if (st.jobs && st.jobs.length) { jobDescriptions = st.jobs; renderJobDescEditor(); }
-                if (st.staffToken) currentStaffToken = st.staffToken;
                 updateTimeIO('in'); updateTimeIO('out'); updatePax();
                 document.getElementById('restoreBanner').style.display = 'none';
             } catch (e) {
