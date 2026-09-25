@@ -563,6 +563,11 @@
                 <button class="btn-logout" onclick="logout()">Log Keluar</button>
             </div>
 
+            <button type="button" id="btnNewReport" class="print-btn" style="background-color:#16a085; margin-top:0;" onclick="resetFormForNewReport()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+                Mula Laporan Baru
+            </button>
+
             <a href="/dashboard" id="btnDashboard" class="btn-dashboard" style="display: none;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
                 Pergi ke Dashboard
@@ -1406,6 +1411,73 @@
                 roleDisplay.style.background = '#2ecc71';
                 roleDisplay.innerText = 'Technician';
             }
+        }
+
+        /**
+         * MULA LAPORAN BARU
+         * Ini fix utama untuk isu "update form ganti row terakhir": punca sebenar
+         * ialah currentStaffToken tak pernah reset selepas satu report siap, jadi
+         * report seterusnya (dalam sesi sama, tanpa logout) hantar token lama dan
+         * backend ingat ia update report lama tu, bukan cipta row baru.
+         *
+         * Tekan button ni bila nak mula report baru dalam sesi yang sama —
+         * token baru dijana, semua field/gambar/tandatangan dikosongkan.
+         */
+        function resetFormForNewReport() {
+            if (!confirm("Ini akan kosongkan semua maklumat dalam form untuk mula laporan baru.\n\nDraf yang dah 'Simpan Data' selamat dalam sistem — cari balik guna PO Number nanti.\nTapi apa-apa yang belum sempat disimpan akan hilang.\n\nTeruskan?")) {
+                return;
+            }
+
+            // Kunci utama fix — token baru elak clash dengan report sebelum ini
+            currentStaffToken = '';
+
+            // Kosongkan semua field teks/tarikh & preview dia sekali (setFieldValue dispatch 'input')
+            TEXT_FIELD_IDS.forEach(function (id) { setFieldValue(id, ''); });
+
+            // Job description kembali ke satu baris kosong
+            jobDescriptions = [{ desc: '', remark: '' }];
+            renderJobDescEditor();
+
+            // Manpower
+            const paxCountEl = document.getElementById('f_pax_count');
+            const paxNamesEl = document.getElementById('f_pax_names');
+            if (paxCountEl) paxCountEl.value = '';
+            if (paxNamesEl) paxNamesEl.value = '';
+            updatePax();
+
+            // Masa (preview v_in/v_out ikut sekali sebab setFieldValue f_in/f_out dah dispatch input,
+            // tapi panggil terus untuk pastikan label preview memang kosong)
+            updateTimeIO('in');
+            updateTimeIO('out');
+
+            // Gambar
+            uploadedImages = [];
+            renderEditorImages();
+            renderImages();
+
+            // Tandatangan — lukis & upload
+            clearStaffCanvas();
+            clearSigUpload();
+            setSigMode('draw');
+
+            // Checkbox "Sama seperti PIC Client"
+            const copyPicEl = document.getElementById('copyPicDetails');
+            if (copyPicEl) copyPicEl.checked = false;
+
+            // Carian PO
+            const searchInput = document.getElementById('searchPoInput');
+            if (searchInput) searchInput.value = '';
+            const searchMsg = document.getElementById('searchMsg');
+            if (searchMsg) searchMsg.innerText = '';
+
+            // Buang autosave lama & banner pulih, reset mesej sistem
+            clearAutosave();
+            document.getElementById('restoreBanner').style.display = 'none';
+            const msgBox = document.getElementById('systemMessage');
+            msgBox.style.background = 'transparent';
+            msgBox.innerHTML = '';
+
+            applyPreviewScale();
         }
 
         /* =========================================
