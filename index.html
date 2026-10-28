@@ -211,6 +211,28 @@
         .desc-col { width: 85%; border-right: 1px solid #000; }
         .remark-col { width: 15%; text-align: center; font-weight: bold; }
 
+        /* Tanda job shutdown (borang + PDF) */
+        .shutdown-badge {
+            display: inline-block; background: #c0392b; color: #fff; font-size: 9px; font-weight: 700;
+            padding: 1px 6px; border-radius: 3px; margin-right: 6px; letter-spacing: 0.5px; vertical-align: 1px;
+        }
+        .shutdown-toggle {
+            display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700;
+            color: #c0392b; white-space: nowrap; cursor: pointer; margin: 0;
+        }
+        .shutdown-toggle input { width: 14px; height: 14px; margin: 0; padding: 0; }
+        .voltage-select { width: 100%; padding: 3px 2px; font-size: 10px; font-weight: 700; color: #c0392b; border: 1px solid #c0392b; border-radius: 3px; }
+        .voltage-select.missing { background: #fdecea; }
+
+        /* Jadual manpower dalam PDF */
+        .mp-table { width: 100%; border-collapse: collapse; font-size: 11px; white-space: normal; }
+        .mp-table th { text-align: left; font-weight: 700; border-bottom: 1px solid #000; padding: 2px 6px; text-transform: uppercase; font-size: 10px; }
+        .mp-table td { padding: 3px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
+        .mp-table tr:last-child td { border-bottom: none; }
+        .mp-table .mp-role { width: 22%; font-weight: 700; }
+        .mp-table .mp-pax { width: 10%; text-align: center; }
+        .mp-total { margin-top: 4px; font-size: 10px; font-weight: 700; text-align: right; white-space: normal; }
+
         .photo-grid {
             display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, 1fr);
             gap: 10px; flex-grow: 1; margin-bottom: 10px; height: 100%; max-height: 215mm;
@@ -586,6 +608,12 @@
                 <span class="dot"></span><span id="netText">Sambungan internet ok</span>
             </div>
 
+            <div id="storeWarn" style="display:none; background:#fdecea; border:1px solid #f5b7b1; color:#922b21; padding:9px 11px; border-radius:4px; font-size:11px; line-height:1.5; margin-bottom:10px;">
+                <b>Peranti ini menyekat simpanan tempatan.</b>
+                Barisan offline tidak aktif. Data hanya wujud selagi borang ini terbuka —
+                jangan tutup sebelum keluar mesej berjaya.
+            </div>
+
             <!-- BARISAN LAPORAN MENUNGGU DIHANTAR -->
             <div id="queueBox" style="display:none;">
                 <div class="q-head">
@@ -668,6 +696,13 @@
 
             <hr style="margin: 15px 0;">
 
+            <div class="input-group" style="background: #eaf2f8; padding: 8px; border-radius: 4px; border: 1px dashed #2980b9; margin-bottom: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #1f618d; font-size: 11px; margin: 0;">
+                    <input type="checkbox" id="f_ptw" onchange="updatePtw()" style="width: 14px; height: 14px; margin: 0; padding: 0;">
+                    <span style="margin-top: 2px;">Ada PTW (Permit To Work) untuk kerja ini</span>
+                </label>
+            </div>
+
             <div class="input-group">
                 <label>Job Description / Job Details & Remark</label>
                 <div id="jobDescEditorContainer"></div>
@@ -680,11 +715,9 @@
             </div>
 
             <div class="input-group">
-                <label>Manpower (Berapa pax & Nama)</label>
-                <div style="display:flex; gap:5px;">
-                    <input type="number" id="f_pax_count" placeholder="Pax" style="width: 25%;" oninput="updatePax()">
-                    <input type="text" id="f_pax_names" placeholder="Cth: Amir, Amri, Abdul" style="width: 75%;" oninput="updatePax()">
-                </div>
+                <label>Manpower (Jawatan | Berapa Pax | Nama)</label>
+                <div id="manpowerEditorContainer"></div>
+                <button type="button" class="print-btn" style="background-color: #3498db; padding: 6px; margin-top: 5px; width: 100%; font-size: 11px;" onclick="addManpowerRow()">+ Tambah Baris Manpower</button>
             </div>
 
             <hr style="margin: 15px 0;">
@@ -740,6 +773,10 @@
             <div class="input-group">
                 <label>PIC Technician / Staff Position</label>
                 <input type="text" id="f_staff_pos" oninput="update('v_staff_pos', this.value)">
+            </div>
+            <div class="input-group">
+                <label>Emel Staff (Final PDF dihantar ke sini selepas klien sign)</label>
+                <input type="email" id="f_staff_email" placeholder="cth: aiman@voltake.com" autocomplete="email">
             </div>
 
             <!-- ============================================
@@ -843,6 +880,7 @@
                         <div class="grid-item"><div class="field-label">Time Out</div><div class="field-value" id="v_out"></div></div>
                         <div class="grid-item"><div class="field-label">PIC Client</div><div class="field-value" id="v_pic_name"></div></div>
                         <div class="grid-item"><div class="field-label">PIC Phone</div><div class="field-value" id="v_pic_phone"></div></div>
+                        <div class="grid-item" style="grid-column: span 2;"><div class="field-label">PTW</div><div class="field-value" id="v_ptw">NO</div></div>
                     </div>
                 </div>
 
@@ -934,7 +972,7 @@
 
     <!-- JAVASCRIPT -->
     <script>
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwGau7rbUxyvTXGPHxJSeTwn9yUOXBWbafIjXJVow05B-Pf4yS5RZf7FYBHcJghGMDq/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwbhcQLfXbWVew3EUey82mj4z-Wgm1uzDYcCKrFPHFW_jfde-SFWxj1Ok1H2FVTijna/exec";
 
         // Tetapan prestasi
         const IMG_MAX_DIM      = 1400;  // saiz maksimum sisi terpanjang gambar
@@ -952,9 +990,15 @@
         const TEXT_FIELD_IDS = [
             'f_date','f_po','f_qt','f_mos','f_client','f_title','f_loc',
             'f_pic_name','f_pic_phone','f_in','f_out','f_issue',
-            'f_pax_count','f_pax_names','f_sign_client_name','f_sign_client_pos',
-            'f_sign_client_phone','f_staff_name','f_staff_pos'
+            'f_sign_client_name','f_sign_client_pos',
+            'f_sign_client_phone','f_staff_name','f_staff_pos','f_staff_email'
         ];
+
+        const STAFF_EMAIL_KEY = 'voltake_gwr_staff_email'; // emel staff diingat dalam phone ini
+        const MANPOWER_ROLES  = ['Technician', 'Engineer', 'Chargeman'];
+        const VOLTAGES        = ['LV', 'MV'];               // voltan untuk job shutdown
+        // Penanda dalam lajur JobDesc: [SHUTDOWN LV] / [SHUTDOWN MV] / [SHUTDOWN]
+        const SHUTDOWN_TAG_RE = /^\[SHUTDOWN(?:[ -](LV|MV))?\]\s*/i;
 
         const templateHeaderHTML = `
             <div class="report-header">
@@ -1102,6 +1146,66 @@
             });
         }
 
+
+        /* =========================================================
+           LAPISAN SIMPANAN — JANGAN SEKAT PENGGUNA
+
+           Sesetengah peranti menyekat IndexedDB: iPhone dalam Private Mode,
+           in-app browser, atau bila simpanan penuh. Barisan offline adalah
+           perlindungan tambahan, bukan syarat. Kalau ia tak boleh digunakan,
+           sistem teruskan dalam memori dan hantar terus — technician tetap
+           boleh bekerja, cuma tanpa perlindungan kalau browser ditutup.
+           ========================================================= */
+        let storeOk = true;
+        let memQueue = [];
+
+        async function initQueueStore() {
+            try {
+                await openDB();
+                await idbPut({ id: '__probe__' });
+                await idbDelete('__probe__');
+                storeOk = true;
+            } catch (e) {
+                storeOk = false;
+            }
+            updateStoreWarn();
+        }
+
+        function updateStoreWarn() {
+            const el = document.getElementById('storeWarn');
+            if (!el) return;
+            el.style.display = storeOk ? 'none' : 'block';
+        }
+
+        const store = {
+            async put(job) {
+                if (storeOk) {
+                    try { return await idbPut(job); } catch (e) { storeOk = false; updateStoreWarn(); }
+                }
+                const i = memQueue.findIndex(function (j) { return j.id === job.id; });
+                if (i >= 0) memQueue[i] = job; else memQueue.push(job);
+                return job;
+            },
+            async del(id) {
+                if (storeOk) {
+                    try { return await idbDelete(id); } catch (e) { storeOk = false; updateStoreWarn(); }
+                }
+                memQueue = memQueue.filter(function (j) { return j.id !== id; });
+            },
+            async all() {
+                if (storeOk) {
+                    try { return await idbAll(); } catch (e) { storeOk = false; updateStoreWarn(); }
+                }
+                return memQueue.slice();
+            },
+            async get(id) {
+                if (storeOk) {
+                    try { return await idbGet(id); } catch (e) { storeOk = false; updateStoreWarn(); }
+                }
+                return memQueue.find(function (j) { return j.id === id; }) || null;
+            }
+        };
+
         /* ---------- Bina satu kerja untuk dimasukkan ke barisan ---------- */
         function val(id) {
             const el = document.getElementById(id);
@@ -1147,10 +1251,13 @@
                 timeIn: document.getElementById('v_in').innerText || '',
                 timeOut: document.getElementById('v_out').innerText || '',
                 jobDesc: getCombinedJobDescString(),
+                jobItems: getJobItems(),      // server kira ringkasan JobShutdown dari sini
+                ptw: document.getElementById('f_ptw').checked ? 'YES' : 'NO',
                 issue: val('f_issue'),
-                remarks: document.getElementById('v_remark').innerText || '',
+                remarks: getManpowerString(), // masuk lajur "Manpower"
                 staffName: val('f_staff_name'),
-                staffPosition: val('f_staff_pos')
+                staffPosition: val('f_staff_pos'),
+                staffEmail: val('f_staff_email').trim()
             };
 
             if (type === 'submit_report') {
@@ -1160,6 +1267,7 @@
             const dateLabel = document.getElementById('v_date').innerText || meta.date || '';
             return {
                 id: uuid(),
+                formId: currentFormId,   // borang mana yang cipta kerja ini
                 clientReqId: uuid(),
                 type: type,
                 label: (payload.po || 'Tiada PO') + (dateLabel ? (' · ' + dateLabel) : ''),
@@ -1197,7 +1305,7 @@
                 res.images.forEach(function (saved, k) {
                     if (chunk[k]) { chunk[k].driveId = saved.id; chunk[k].base64 = ''; }
                 });
-                await idbPut(job);
+                await store.put(job);
             }
 
             // Langkah 2: hantar tindakan utama
@@ -1223,7 +1331,7 @@
             if (queueRunning) return;
 
             let jobs = [];
-            try { jobs = await idbAll(); } catch (err) { return; }
+            try { jobs = await store.all(); } catch (err) { return; }
             const pend = jobs.filter(function (j) { return j.status !== 'done'; })
                              .sort(function (a, b) { return a.createdAt - b.createdAt; });
 
@@ -1237,33 +1345,47 @@
             for (const job of pend) {
                 try {
                     job.status = 'sending';
-                    await idbPut(job);
+                    await store.put(job);
                     renderQueueUI(pend);
 
                     const res = await sendJob(job);
 
+                    // Kerja dari borang lama (cth. sampai lewat selepas user mula borang
+                    // baru) TIDAK boleh ubah token borang semasa. Kalau tidak, borang
+                    // baru akan menulis atas rekod lama.
+                    const isCurrentForm = !job.formId || job.formId === currentFormId;
+
                     if (job.type === 'submit_report') {
                         // Laporan sudah siap dihantar. Kosongkan token supaya
                         // borang seterusnya mula sebagai rekod BARU.
-                        currentStaffToken = '';
+                        if (isCurrentForm) { currentStaffToken = ''; currentFormId = uuid(); }
                         if (res.approvalLink) showApprovalResult(res, job);
                     } else if (res.staffToken) {
-                        currentStaffToken = res.staffToken;
+                        if (isCurrentForm) currentStaffToken = res.staffToken;
+                        // Simpan -> Hantar semasa offline: kerja Hantar dibina sebelum token
+                        // draf wujud. Sambungkan ke rekod draf yang sama, elak baris pendua.
+                        for (const other of pend) {
+                            if (other !== job && other.formId && other.formId === job.formId &&
+                                other.status !== 'done' && !other.payload.staffToken) {
+                                other.payload.staffToken = res.staffToken;
+                                await store.put(other);
+                            }
+                        }
                     }
-                    await idbDelete(job.id);
+                    await store.del(job.id);
                     job.status = 'done';
                 } catch (err) {
                     job.status = 'pending';
                     job.attempts = (job.attempts || 0) + 1;
                     job.lastError = (err && err.message) ? err.message : 'Ralat tidak diketahui';
-                    await idbPut(job);
+                    await store.put(job);
                     break; // berhenti dulu, cuba lagi kemudian
                 }
             }
 
             queueRunning = false;
             setTechProgress('');
-            const after = (await idbAll()).filter(function (j) { return j.status !== 'done'; });
+            const after = (await store.all()).filter(function (j) { return j.status !== 'done'; });
             renderQueueUI(after);
         }
 
@@ -1274,7 +1396,7 @@
             const box = document.getElementById('queueBox');
             if (!box) return;
 
-            if (!jobs) { idbAll().then(function (all) {
+            if (!jobs) { store.all().then(function (all) {
                 renderQueueUI(all.filter(function (j) { return j.status !== 'done'; }));
             }); return; }
 
@@ -1314,7 +1436,7 @@
         function dropQueueJob(id, btn) {
             if (qPendingDrop === id) {
                 qPendingDrop = null;
-                idbDelete(id).then(function () { renderQueueUI(); });
+                store.del(id).then(function () { renderQueueUI(); });
                 return;
             }
             qPendingDrop = id;
@@ -1349,11 +1471,12 @@
         window.addEventListener('load', function () {
             showTechLoader("SYSTEM BOOTING...");
             renderJobDescEditor();
+            renderManpowerEditor();
             renderImages();
             checkAutosave();
             updateNetBar();
             // Sambung semula penghantaran yang tergendala pada sesi lepas
-            processQueue();
+            initQueueStore().then(function () { processQueue(); });
             setTimeout(hideTechLoader, 1200);
         });
 
@@ -1362,6 +1485,7 @@
            ========================================= */
         let currentRole = null;
         let currentStaffToken = "";
+        let currentFormId = uuid();   // berubah setiap kali borang baru / tarik draf
 
         function checkLogin() {
             const role = document.getElementById('loginRole').value;
@@ -1379,6 +1503,7 @@
             document.getElementById('roleDisplay').innerText = role;
 
             applyRoleUI();
+            prefillStaffEmail();
             startAutosave();
             updateNetBar();
             renderQueueUI();
@@ -1468,8 +1593,14 @@
                 if (el) el.innerText = '';
             });
 
-            jobDescriptions = [{ desc: '', remark: '' }];
+            jobDescriptions = [newJobRow()];
             renderJobDescEditor();
+
+            manpowerRows = [newManpowerRow()];
+            renderManpowerEditor();
+
+            document.getElementById('f_ptw').checked = false;
+            updatePtw();
 
             uploadedImages = [];
             resetPendingDelete();
@@ -1484,6 +1615,8 @@
 
             // Ini yang paling penting — rekod seterusnya jadi baris BARU
             currentStaffToken = '';
+            currentFormId = uuid();
+            prefillStaffEmail();
 
             clearAutosave();
             document.getElementById('restoreBanner').style.display = 'none';
@@ -1505,7 +1638,11 @@
         let autosaveTimer = null;
 
         function collectTextState() {
-            const state = { fields: {}, jobs: jobDescriptions, ts: Date.now() };
+            const state = {
+                fields: {}, jobs: jobDescriptions, manpower: manpowerRows,
+                ptw: document.getElementById('f_ptw').checked,
+                staffToken: currentStaffToken, formId: currentFormId, ts: Date.now()
+            };
             TEXT_FIELD_IDS.forEach(function (id) {
                 const el = document.getElementById(id);
                 if (el) state.fields[id] = el.value;
@@ -1542,8 +1679,23 @@
                 TEXT_FIELD_IDS.forEach(function (id) {
                     if (st.fields[id] !== undefined) setFieldValue(id, st.fields[id]);
                 });
-                if (st.jobs && st.jobs.length) { jobDescriptions = st.jobs; renderJobDescEditor(); }
-                updateTimeIO('in'); updateTimeIO('out'); updatePax();
+                if (st.jobs && st.jobs.length) { jobDescriptions = normalizeJobs(st.jobs); renderJobDescEditor(); }
+
+                // Autosave versi lama simpan pax dalam f_pax_count / f_pax_names
+                const oldCount = st.fields.f_pax_count || '', oldNames = st.fields.f_pax_names || '';
+                const legacyPax = (oldCount ? oldCount + ' pax' : '') + (oldCount && oldNames ? ' - ' : '') + oldNames;
+                manpowerRows = (st.manpower && st.manpower.length)
+                    ? parseManpower(st.manpower) : parseManpower(null, legacyPax);
+                renderManpowerEditor();
+
+                document.getElementById('f_ptw').checked = st.ptw === true;
+                updatePtw();
+
+                // Sambung rekod yang sama. Tanpa ini, Hantar selepas pulih cipta baris baru.
+                if (st.staffToken) currentStaffToken = st.staffToken;
+                if (st.formId) currentFormId = st.formId;
+
+                updateTimeIO('in'); updateTimeIO('out');
                 document.getElementById('restoreBanner').style.display = 'none';
             } catch (e) {
                 alert('Gagal memulihkan data.');
@@ -1568,7 +1720,23 @@
         /* =========================================
            JOB DESCRIPTION DINAMIK
            ========================================= */
-        let jobDescriptions = [{ desc: '', remark: '' }];
+        let jobDescriptions = [newJobRow()];
+
+        function newJobRow() { return { desc: '', remark: '', shutdown: false, voltage: '' }; }
+
+        // Pastikan setiap job ada semua field (autosave lama tiada `shutdown` / `voltage`)
+        function normalizeJobs(arr) {
+            if (!Array.isArray(arr) || !arr.length) return [newJobRow()];
+            return arr.map(function (j) {
+                const shutdown = !!(j && j.shutdown === true);
+                return {
+                    desc: (j && j.desc) || '',
+                    remark: (j && j.remark) || '',
+                    shutdown: shutdown,
+                    voltage: (shutdown && j && VOLTAGES.indexOf(j.voltage) > -1) ? j.voltage : ''
+                };
+            });
+        }
 
         function renderJobDescEditor() {
             const container = document.getElementById('jobDescEditorContainer');
@@ -1577,7 +1745,17 @@
                 parts.push(`
                     <div style="display: flex; gap: 5px; margin-bottom: 2px; align-items: flex-start; border-bottom: 1px dashed #ccc; padding-bottom: 2px;">
                         <textarea placeholder="Description (Cth: GIS Maintenance...)" oninput="updateJobDesc(${index}, 'desc', this.value)" style="flex: 1; min-height: 40px; font-size: 11px; padding: 4px; border: 1px solid #bdc3c7; border-radius: 3px;">${escapeHtml(job.desc)}</textarea>
-                        <input type="text" placeholder="Remark" oninput="updateJobDesc(${index}, 'remark', this.value)" value="${escapeHtml(job.remark)}" style="width: 70px; font-size: 11px; padding: 4px; border: 1px solid #bdc3c7; border-radius: 3px;">
+                        <div style="display: flex; flex-direction: column; gap: 5px; width: 78px; flex-shrink: 0;">
+                            <input type="text" placeholder="Remark" oninput="updateJobDesc(${index}, 'remark', this.value)" value="${escapeHtml(job.remark)}" style="width: 100%; font-size: 11px; padding: 4px; border: 1px solid #bdc3c7; border-radius: 3px;">
+                            <label class="shutdown-toggle" title="Tanda jika job ini melibatkan shutdown">
+                                <input type="checkbox" onchange="updateJobDesc(${index}, 'shutdown', this.checked)" ${job.shutdown ? 'checked' : ''}> Shutdown
+                            </label>
+                            ${job.shutdown ? `
+                            <select class="voltage-select${job.voltage ? '' : ' missing'}" onchange="updateJobDesc(${index}, 'voltage', this.value)" title="Voltan shutdown">
+                                <option value="">-- Voltan --</option>
+                                ${VOLTAGES.map(function (v) { return `<option value="${v}" ${job.voltage === v ? 'selected' : ''}>${v}</option>`; }).join('')}
+                            </select>` : ''}
+                        </div>
                         <button type="button" onclick="removeJobDescRow(${index})" style="background: #e74c3c; color: white; border: none; padding: 4px 6px; cursor: pointer; border-radius: 3px; font-weight: bold; font-size: 10px;" title="Padam Baris">X</button>
                     </div>
                 `);
@@ -1587,35 +1765,61 @@
         }
 
         function addJobDescRow() {
-            jobDescriptions.push({ desc: '', remark: '' });
+            jobDescriptions.push(newJobRow());
             renderJobDescEditor();
         }
 
         function removeJobDescRow(index) {
             if (jobDescriptions.length > 1) jobDescriptions.splice(index, 1);
-            else jobDescriptions[0] = { desc: '', remark: '' };
+            else jobDescriptions[0] = newJobRow();
             renderJobDescEditor();
         }
 
         function updateJobDesc(index, field, value) {
             jobDescriptions[index][field] = value;
+            if (field === 'shutdown') {
+                // Dropdown voltan hanya keluar bila Shutdown ditanda
+                if (!value) jobDescriptions[index].voltage = '';
+                renderJobDescEditor();
+                return;
+            }
+            if (field === 'voltage') {
+                renderJobDescEditor();
+                return;
+            }
             updateJobDescPreview();
+        }
+
+        function shutdownLabel(job) {
+            return 'SHUTDOWN' + (job.voltage ? ' ' + job.voltage : '');
         }
 
         function updateJobDescPreview() {
             const parts = [];
             jobDescriptions.forEach(function (job) {
                 if (job.desc || job.remark) {
-                    parts.push(`<tr><td class="desc-col">${escapeHtml(job.desc)}</td><td class="remark-col">${escapeHtml(job.remark)}</td></tr>`);
+                    const badge = job.shutdown ? '<span class="shutdown-badge">' + shutdownLabel(job) + '</span>' : '';
+                    parts.push(`<tr><td class="desc-col">${badge}${escapeHtml(job.desc)}</td><td class="remark-col">${escapeHtml(job.remark)}</td></tr>`);
                 }
             });
             document.getElementById('v_job_desc').innerHTML = parts.join('');
         }
 
+        // Senarai job berstruktur untuk lajur JobItemsData
+        function getJobItems() {
+            return jobDescriptions
+                .filter(function (job) { return job.desc || job.remark; })
+                .map(function (job) {
+                    return { desc: job.desc || '', remark: job.remark || '', shutdown: !!job.shutdown, voltage: job.shutdown ? (job.voltage || '') : '' };
+                });
+        }
+
+        // Teks gabungan untuk lajur JobDesc (dipapar dalam dashboard).
+        // Job shutdown diberi penanda di depan, cth: [SHUTDOWN LV]
         function getCombinedJobDescString() {
             return jobDescriptions.map(function (job) {
                 if (!job.desc && !job.remark) return '';
-                let text = job.desc;
+                let text = (job.shutdown ? '[' + shutdownLabel(job) + '] ' : '') + job.desc;
                 if (job.remark) {
                     if (text.indexOf('\n') > -1) {
                         const lines = text.split('\n');
@@ -1629,19 +1833,179 @@
             }).filter(Boolean).join('\n\n');
         }
 
+        // Baca semula job dari lajur JobDesc (termasuk penanda shutdown & voltan)
         function parseJobDescString(str) {
-            if (!str) return [{ desc: '', remark: '' }];
+            if (!str) return [newJobRow()];
             const jobs = [];
             str.split(/\n\n+/).forEach(function (block) {
                 const parts = block.split(/ {4,}/);
+                let desc, remark = '';
                 if (parts.length > 1) {
-                    const remark = parts.pop().trim();
-                    jobs.push({ desc: parts.join('    ').trim(), remark: remark });
+                    remark = parts.pop().trim();
+                    desc = parts.join('    ').trim();
                 } else {
-                    jobs.push({ desc: block.trim(), remark: '' });
+                    desc = block.trim();
                 }
+                let shutdown = false, voltage = '';
+                const m = desc.match(SHUTDOWN_TAG_RE);
+                if (m) {
+                    shutdown = true;
+                    voltage = m[1] ? m[1].toUpperCase() : '';
+                    desc = desc.slice(m[0].length).trim();
+                }
+                jobs.push({ desc: desc, remark: remark, shutdown: shutdown, voltage: voltage });
             });
-            return jobs.length > 0 ? jobs : [{ desc: '', remark: '' }];
+            return jobs.length > 0 ? jobs : [newJobRow()];
+        }
+
+        /* =========================================
+           MANPOWER — IKUT JAWATAN
+           Setiap baris: Jawatan | Pax | Nama.
+           Baris tambahan hanya bila perlu.
+           ========================================= */
+        let manpowerRows = [newManpowerRow()];
+
+        function newManpowerRow() { return { role: '', count: '', names: '' }; }
+
+        function renderManpowerEditor() {
+            const container = document.getElementById('manpowerEditorContainer');
+            if (!container) return;
+            const parts = manpowerRows.map(function (row, index) {
+                const opts = ['<option value="">-- Jawatan --</option>'].concat(MANPOWER_ROLES.map(function (r) {
+                    return `<option value="${r}" ${row.role === r ? 'selected' : ''}>${r}</option>`;
+                })).join('');
+                return `
+                    <div style="display: flex; gap: 5px; margin-bottom: 4px; align-items: center;">
+                        <select onchange="updateManpower(${index}, 'role', this.value)" style="width: 32%; padding: 5px; font-size: 11px;">${opts}</select>
+                        <input type="number" min="0" inputmode="numeric" placeholder="Pax" value="${escapeHtml(row.count)}" oninput="updateManpower(${index}, 'count', this.value)" style="width: 17%; padding: 5px; font-size: 11px;">
+                        <input type="text" placeholder="Nama (Cth: Aiman, Bukhari)" value="${escapeHtml(row.names)}" oninput="updateManpower(${index}, 'names', this.value)" style="width: auto; flex: 1; min-width: 0; padding: 5px; font-size: 11px;">
+                        <button type="button" onclick="removeManpowerRow(${index})" style="background: #e74c3c; color: white; border: none; padding: 4px 6px; cursor: pointer; border-radius: 3px; font-weight: bold; font-size: 10px;" title="Padam Baris">X</button>
+                    </div>`;
+            });
+            container.innerHTML = parts.join('');
+            updateManpowerPreview();
+        }
+
+        function addManpowerRow() {
+            manpowerRows.push(newManpowerRow());
+            renderManpowerEditor();
+        }
+
+        function removeManpowerRow(index) {
+            if (manpowerRows.length > 1) manpowerRows.splice(index, 1);
+            else manpowerRows[0] = newManpowerRow();
+            renderManpowerEditor();
+        }
+
+        function updateManpower(index, field, value) {
+            manpowerRows[index][field] = value;
+            updateManpowerPreview();
+        }
+
+        function countNames(names) {
+            return (names || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean).length;
+        }
+
+        // Baris yang diisi sahaja. Kalau Pax kosong, dikira dari bilangan nama.
+        function getManpowerItems() {
+            return manpowerRows
+                .filter(function (r) { return r.role || r.count || (r.names || '').trim(); })
+                .map(function (r) {
+                    const names = (r.names || '').trim();
+                    let count = (r.count === null || r.count === undefined) ? '' : String(r.count).trim();
+                    if (!count && countNames(names)) count = String(countNames(names));
+                    return { role: r.role || '', count: count, names: names };
+                });
+        }
+
+        // Teks untuk lajur Remarks dalam sheet, cth: "Engineer | 2 | Aiman, Bukhari"
+        function getManpowerString() {
+            return getManpowerItems().map(function (r) {
+                return (r.role || '-') + ' | ' + (r.count || '-') + ' | ' + (r.names || '-');
+            }).join('\n');
+        }
+
+        function updateManpowerPreview() {
+            const el = document.getElementById('v_remark');
+            if (!el) return;
+            const items = getManpowerItems();
+            if (!items.length) { el.innerHTML = ''; return; }
+            let total = 0;
+            const rows = items.map(function (r) {
+                total += parseInt(r.count, 10) || 0;
+                return '<tr><td class="mp-role">' + escapeHtml(r.role || '-') + '</td>' +
+                       '<td class="mp-pax">' + escapeHtml(r.count || '-') + '</td>' +
+                       '<td>' + escapeHtml(r.names || '-') + '</td></tr>';
+            }).join('');
+            // Tiada whitespace antara tag — .content-box guna white-space: pre-wrap
+            el.innerHTML = '<table class="mp-table"><thead><tr><th>Position</th><th class="mp-pax">Pax</th><th>Name</th></tr></thead>' +
+                           '<tbody>' + rows + '</tbody></table>' +
+                           (total ? '<div class="mp-total">Total: ' + total + ' pax</div>' : '');
+        }
+
+        // Baca semula manpower. Rekod lama hanya ada teks "2 pax - Amir, Amri".
+        function parseManpower(items, remarksStr) {
+            if (Array.isArray(items) && items.length) {
+                return items.map(function (r) {
+                    return {
+                        role: (r && r.role) || '',
+                        count: (r && r.count !== null && r.count !== undefined) ? String(r.count) : '',
+                        names: (r && r.names) || ''
+                    };
+                });
+            }
+            const str = (remarksStr || '').toString().trim();
+            if (!str) return [newManpowerRow()];
+
+            // Format baru dalam teks: "Engineer | 2 | Aiman, Bukhari" (satu baris setiap jawatan)
+            if (str.indexOf(' | ') > -1) {
+                const clean = function (v) { v = (v || '').trim(); return v === '-' ? '' : v; };
+                return str.split('\n').filter(function (l) { return l.trim(); }).map(function (line) {
+                    const p = line.split(' | ');
+                    return { role: clean(p[0]), count: clean(p[1]), names: clean(p.slice(2).join(' | ')) };
+                });
+            }
+
+            // Format lama
+            let count = '', names = '';
+            if (str.indexOf(' pax - ') > -1) {
+                const parts = str.split(' pax - ');
+                count = parts[0].trim();
+                names = parts.slice(1).join(' pax - ').trim();
+            } else if (/^\d+\s*pax$/i.test(str)) {
+                count = str.replace(/\s*pax$/i, '');
+            } else {
+                names = str;
+            }
+            return [{ role: '', count: count, names: names }];
+        }
+
+        /* =========================================
+           PTW (PERMIT TO WORK) — untuk keseluruhan job
+           ========================================= */
+        function updatePtw() {
+            update('v_ptw', document.getElementById('f_ptw').checked ? 'YES' : 'NO');
+        }
+
+        /* =========================================
+           EMEL STAFF
+           Diingat dalam phone ini supaya technician tak perlu taip setiap kali.
+           ========================================= */
+        function isValidEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || '');
+        }
+
+        function getRememberedStaffEmail() {
+            try { return localStorage.getItem(STAFF_EMAIL_KEY) || ''; } catch (e) { return ''; }
+        }
+
+        function rememberStaffEmail(email) {
+            try { if (email) localStorage.setItem(STAFF_EMAIL_KEY, email); } catch (e) {}
+        }
+
+        function prefillStaffEmail() {
+            const el = document.getElementById('f_staff_email');
+            if (el && !el.value) el.value = getRememberedStaffEmail();
         }
 
         /* =========================================
@@ -1687,16 +2051,6 @@
             const targetId = type === 'in' ? 'v_in' : 'v_out';
             document.getElementById(targetId).innerText =
                 formatDateTimeCustom(document.getElementById(inputId).value);
-        }
-
-        function updatePax() {
-            const count = document.getElementById('f_pax_count').value;
-            const names = document.getElementById('f_pax_names').value;
-            let result = '';
-            if (count) result += `${count} pax`;
-            if (count && names) result += ' - ';
-            if (names) result += names;
-            document.getElementById('v_remark').innerText = result;
         }
 
         function handleCopyPic() { syncPicDetails(); }
@@ -1808,22 +2162,18 @@
             setFieldValue('f_staff_name', dataObj.staffName);
             setFieldValue('f_staff_pos', dataObj.staffPos);
 
-            jobDescriptions = dataObj.jobDesc ? parseJobDescString(dataObj.jobDesc) : [{ desc: '', remark: '' }];
+            jobDescriptions = dataObj.jobDesc ? parseJobDescString(dataObj.jobDesc) : [newJobRow()];
             renderJobDescEditor();
 
-            const remarksStr = dataObj.remarks || '';
-            let paxCount = '', paxNames = '';
-            if (remarksStr.indexOf(' pax - ') > -1) {
-                const parts = remarksStr.split(' pax - ');
-                paxCount = parts[0]; paxNames = parts[1];
-            } else if (remarksStr.indexOf(' pax') > -1) {
-                paxCount = remarksStr.replace(' pax', '');
-            } else {
-                paxNames = remarksStr;
-            }
-            document.getElementById('f_pax_count').value = paxCount;
-            document.getElementById('f_pax_names').value = paxNames;
-            updatePax();
+            manpowerRows = parseManpower(null, dataObj.remarks);
+            renderManpowerEditor();
+
+            document.getElementById('f_ptw').checked = (dataObj.ptw === 'YES');
+            updatePtw();
+
+            // Orang yang Hantar dari phone ini ialah PIC staff. Utamakan emel yang
+            // diingat dalam phone ini berbanding emel dalam draf (mungkin emel manager).
+            document.getElementById('f_staff_email').value = getRememberedStaffEmail() || dataObj.staffEmail || '';
 
             uploadedImages = [];
             if (dataObj.draftImages && dataObj.draftImages.length > 0) {
@@ -1839,6 +2189,7 @@
             renderImages();
 
             currentStaffToken = dataObj.staffToken;
+            currentFormId = uuid(); // rekod yang ditarik = konteks borang baru
             closePoModal();
             alert("Berjaya tarik data! Sila teruskan kerja anda.");
         }
@@ -2535,14 +2886,14 @@
 
             try {
                 // Simpan dalam phone DAHULU — data tak akan hilang walau apa berlaku
-                await idbPut(job);
+                await store.put(job);
                 renderQueueUI();
                 setTechProgress('Menghantar ke pangkalan data...');
 
                 await processQueue(true);
 
                 hideTechLoader();
-                const still = await idbGet(job.id);
+                const still = await store.get(job.id);
 
                 if (!still) {
                     msgBox.style.background = "#d4edda";
@@ -2595,6 +2946,21 @@
             const btn = document.getElementById('submitSystemBtn');
             const msgBox = document.getElementById('systemMessage');
 
+            const staffEmailEl = document.getElementById('f_staff_email');
+            const staffEmail = staffEmailEl.value.trim();
+            if (!isValidEmail(staffEmail)) {
+                alert("Sila isi Emel Staff yang sah.\nFinal PDF akan dihantar ke emel ini selepas klien sign.");
+                staffEmailEl.focus();
+                return;
+            }
+            rememberStaffEmail(staffEmail);
+
+            const noVoltage = jobDescriptions.filter(function (j) { return (j.desc || j.remark) && j.shutdown && !j.voltage; });
+            if (noVoltage.length) {
+                alert("Sila pilih voltan (LV atau MV) untuk setiap job yang ditanda Shutdown.");
+                return;
+            }
+
             const staffSigBase64 = getStaffSignature();
             if (!staffSigBase64) {
                 if (!confirm("Tandatangan technician masih kosong. Teruskan juga?")) return;
@@ -2622,7 +2988,7 @@
                 // 2) Masuk barisan — disimpan dalam peranti sebelum cuba hantar
                 setTechProgress('Menyimpan dalam peranti...');
                 const job = buildJob('submit_report', pdfBase64, staffSigBase64);
-                await idbPut(job);
+                await store.put(job);
                 renderQueueUI();
 
                 // 3) Cuba hantar sekarang
@@ -2630,7 +2996,7 @@
                 await processQueue(true);
 
                 hideTechLoader();
-                const still = await idbGet(job.id);
+                const still = await store.get(job.id);
 
                 if (still) {
                     msgBox.style.background = "#fef9e7";
